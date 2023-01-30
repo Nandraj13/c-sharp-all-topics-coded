@@ -1,0 +1,136 @@
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+using MySql.Data.MySqlClient;
+
+namespace ConsoleApp2
+{
+    internal class Program
+    {
+        public static int count = 0;
+        public static string MyConnection2 = "datasource=localhost;port=3306;username=root;password=;database=datamigration";
+        public static MySqlConnection MyConn2 = new MySqlConnection(MyConnection2);
+        public static Thread inserter = new Thread(insert);
+        public static Thread handler = new Thread(status);
+        public static Thread migrate = new Thread(migrator);
+        static void Main(string[] args)
+        {
+            migrate.Start();
+            //inserter.Start();  
+        }
+        public static void insert()
+        {
+
+            try
+            {
+
+
+                if (MyConn2 != null)
+                {
+                    Console.WriteLine("connection successfull");
+                }
+                MySqlDataReader MyReader2;
+                handler.Start();//starting thread 2
+                for (int i = 0; i < 300000; i++)
+                {
+                    MyConn2.Open();
+                    string query = "insert into sample (id,number_1,number_2)values('" + i + "','" + i + "','" + i + "')";
+                    MySqlCommand MyCommand2 = new MySqlCommand(query, MyConn2);
+                    MyReader2 = MyCommand2.ExecuteReader();
+                    count++;
+                    MyConn2.Close();
+                }
+                Console.WriteLine("300000 records inserted");
+
+
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex);
+            }
+        }
+        public static void migrator()
+        {
+           
+                try
+                {
+
+                    ArrayList ids = new ArrayList();
+                    ArrayList num1 = new ArrayList();
+                    ArrayList num2 = new ArrayList();
+
+                    if (MyConn2 != null)
+                    {
+                        Console.WriteLine("connection successfull");
+                    }
+                    MySqlDataReader MyReader2;
+
+                    MyConn2.Open();
+                    Console.WriteLine("enter id of first record from where you want to start migration: ");
+                    string rangestart = Console.ReadLine();
+                    Console.WriteLine("enter id of last record (records from first id to last id will be migrated): ");
+                    string rangeend = Console.ReadLine();
+                    dynamic query = "select * from sample where id between " + rangestart + " and " + rangeend + "";
+                    MySqlCommand MyCommand2 = new MySqlCommand(query, MyConn2);
+                    MyReader2 = MyCommand2.ExecuteReader();
+                    while (MyReader2.Read())
+                    {
+                        ids.Add(MyReader2["id"]);
+                        num1.Add(MyReader2["number_1"]);
+                        num2.Add(MyReader2["number_2"]);
+                    }
+                    MyConn2.Close();
+                    int loopcount = Convert.ToInt32(rangeend) - Convert.ToInt32(rangestart);
+                    if (loopcount > 1000)
+                    {
+                        Console.WriteLine("sorry in single api call only 100 records can be migrated");
+                        Environment.Exit(0);
+                    }
+                    int copyloopcount = loopcount;
+                    handler.Start();//starting thread 2
+                    while (loopcount >= 0)
+                    {
+                        MyConn2.Open();
+                        int sum = (int)num1[count] + (int)num2[count];
+                        query = "insert into sample1 (fid,sum) values('" + ids[count] + "','" + sum + "')";
+                        MyCommand2 = new MySqlCommand(query, MyConn2);
+                        MyReader2 = MyCommand2.ExecuteReader();
+                        count++;
+                        loopcount--;
+                        Thread.Sleep(50);
+                        MyConn2.Close();
+                    }
+                    Console.WriteLine("operation completed..........");
+                   
+                }
+
+                catch (Exception ex)
+                {
+                    Console.WriteLine(ex);
+                }
+            }
+        public static void status()
+        {
+            dynamic x = Console.ReadLine();
+            while (x != "ok")
+            {
+                if (x == "status")
+                { Console.WriteLine(count + " records Migrated/inserted.."); };
+                if (x == "cancel")
+                {
+                    Console.WriteLine("migration teminated");
+                    Console.WriteLine(count + " records Migrated/inserted..");
+                    Environment.Exit(0);
+                }
+                if (x == "exit")
+                {
+                    Environment.Exit(0);
+                }
+                x = Console.ReadLine();
+            }
+        }
+    }
